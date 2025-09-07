@@ -6,8 +6,8 @@ import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.CRServo;
 
-@TeleOp(name = "MeetOne2025")
-public class MeetOne2025 extends LinearOpMode {
+@TeleOp(name = "DecodeMainTeleop")
+public class DecodeMainTeleop extends LinearOpMode {
     private Blinker control_Hub;
   
     private DcMotor bottomL = null;
