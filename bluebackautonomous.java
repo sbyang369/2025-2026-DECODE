@@ -1,3 +1,7 @@
+//test this code! if it doesn't work go back to the old one
+// should: 1) move forward 2) rotate until it detects the apriltag 3) align to the apriltag
+//will want to get the game field set up first before doing
+
 package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
@@ -82,32 +86,40 @@ public class BlueBackAutonomous extends LinearOpMode {
         telemetry.addData("Status", "Initialized");
         telemetry.update();
 
-        if (opModeIsActive()) {
-            sleep(100); // Waits for 15,000 milliseconds (15 seconds)
-          
-            // Approach Obelisk 
-            driveForward(75,0.5);
-       //     turnLeft(160,0.5);
 
-            if (seenTagId < 0 || !isDesiredTag(seenTagId)) {
-                telemetry.addLine("No desired prestart tag — searching during run...");
-                telemetry.update();
+    if (opModeIsActive()) {
+        sleep(100);
 
-                long searchStart = System.currentTimeMillis();
-                long searchTimeoutMs = 8000; // search up to 8s
-                while (opModeIsActive() && (System.currentTimeMillis() - searchStart) < searchTimeoutMs && !isDesiredTag(seenTagId)) {
-                    List<AprilTagDetection> detections = aprilTag.getDetections();
+        // Approach Obelisk 
+        driveForward(25, 0.5);
+        //turnLeft(160,0.5);
+
+        // --- Start scanning + fallback block ---
+        if (seenTagId < 0 || !isDesiredTag(seenTagId)) {
+            telemetry.addLine("No desired prestart tag — searching during run...");
+            telemetry.update();
+
+            long searchStart = System.currentTimeMillis();
+            long searchTimeoutMs = 15000; // search up to 15s
+            final double TURN_SEARCH_POWER = 0.12;  
+
+            // rotate/scan loop
+            while (opModeIsActive()
+                    && (System.currentTimeMillis() - searchStart) < searchTimeoutMs
+                    && !isDesiredTag(seenTagId)) {
+
+                List<AprilTagDetection> detections = aprilTag.getDetections();
+
+                if (detections != null && !detections.isEmpty()) {
+                    // We saw something — stop rotating and process detections
+                    stopAllDrivePower();
+                    telemetry.addLine("Detections seen; processing...");
+                    telemetry.update();
+
                     for (AprilTagDetection d : detections) {
                         telemetry.addData("seen", "%d (%s)", d.id, d.metadata != null ? d.metadata.name : "no-meta");
-                        if (d.id == 21) {
-                            moveGpp();
-                        }
-                        if (d.id == 23) {
-                            movePpg();
-                        }
-                        if (d.id == 22) {
-                            movePgp();
-                        }
+
+                        // ONLY record the tag id here — do NOT call move* yet
                         if (d.metadata != null && isDesiredTag(d.id)) {
                             seenTagId = d.id;
                             telemetry.addData("chosen", seenTagId);
@@ -115,27 +127,160 @@ public class BlueBackAutonomous extends LinearOpMode {
                             break;
                         }
                     }
-                    telemetry.update();
+
+                    // allow the vision pipeline a short moment to stabilize
                     sleep(60);
+                } else {
+                    // No detections: rotate slowly in place to sweep camera
+                    setTankPower(TURN_SEARCH_POWER, -TURN_SEARCH_POWER);
+                    telemetry.addLine("No tags seen — rotating to scan...");
+                    telemetry.update();
+                    sleep(60); // give the robot time to rotate and camera time to capture
+                    stopAllDrivePower();
+                }
+
+                telemetry.update();
+            } // end while scanning
+
+            // stop any motion left over from scanning
+            stopAllDrivePower();
+            telemetry.update();
+
+            // If nothing found after timeout, perform encoder backup fallback
+            if (seenTagId < 0 || !isDesiredTag(seenTagId)) {
+                telemetry.addLine("No tag found after scanning — performing encoder backup fallback");
+                telemetry.update();
+
+                // negative distance -> drive backward using encoders
+                driveForward(-15, 0.5); // tune distance & power as needed
+            }
+        }
+        
+        // proceed to alignment if tag found
+        if (seenTagId >= 0 && isDesiredTag(seenTagId)) {
+            telemetry.addData("Tag to align to", seenTagId);
+            telemetry.update();
+
+            boolean success = alignToTagAndCenter(seenTagId, 6000);
+            telemetry.addData("Align result", success ? "Centered" : "Timed out");
+            telemetry.update();
+
+            // CALL THE FUNCTIONS ONLY AFTER SUCCESSFUL ALIGNMENT
+            if (success) {
+                if (seenTagId == 21) {
+                    moveGpp();
+                } else if (seenTagId == 23) {
+                    movePpg();
+                } else if (seenTagId == 22) {
+                    movePgp();
+                }
+            } else {
+                telemetry.addLine("Alignment timed out; not executing tag-based functions.");
+                telemetry.update();
+            }
+        } else {
+            telemetry.addLine("No desired tag found — ending test.");
+            telemetry.update();
+        }
+
+        stopAllDrivePower();
+        telemetry.addLine("Test complete.");
+        telemetry.update();
+
+    }
+}
+
+    private void moveGpp() {
+        telemetry.addData("gpp", "called");
+        telemetry.update();
+    }
+    
+    private void movePpg() {
+        telemetry.addData("ppg", "called");
+        telemetry.update();
+    }
+    
+    private void movePgp() {
+        telemetry.addData("pgp", "called");
+        telemetry.update();
+    }
+
+        private boolean alignToTagAndCenter(int targetId, long timeoutMs) {
+        long start = System.currentTimeMillis();
+        while (opModeIsActive() && (System.currentTimeMillis() - start) < timeoutMs) {
+            List<AprilTagDetection> detections = aprilTag.getDetections();
+            AprilTagDetection found = null;
+            for (AprilTagDetection d : detections) {
+                if (d.metadata != null && d.id == targetId && isDesiredTag(d.id)) {
+                    found = d;
+                    break;
                 }
             }
 
-            if (seenTagId >= 0 && isDesiredTag(seenTagId)) {
-                telemetry.addData("Tag to align to", seenTagId);
+            if (found == null) {
+                // rotate slowly to search for tag (mecanum rotate only)
+                // Positive rotate value may rotate one direction; invert sign if needed.
+                setMecanumPower(0.0, 0.0, 0.10); // rotate in place
+                telemetry.addData("Searching", "for tag %d", targetId);
                 telemetry.update();
-                boolean success = alignToTagAndCenter(seenTagId, 6000);
-                telemetry.addData("Align result", success ? "Centered" : "Timed out");
-                telemetry.update();
-            } else {
-                telemetry.addLine("No desired tag found — ending test.");
-                telemetry.update();
+                sleep(60);
+                continue;
             }
-        
+
+            double range = found.ftcPose.range;
+            double bearing = found.ftcPose.bearing;
+
+            double rangeError = range - DESIRED_DISTANCE_INCHES;
+            double headingError = bearing;
+
+            double drive = Range.clip(rangeError * SPEED_GAIN, -MAX_AUTO_SPEED, MAX_AUTO_SPEED);
+            double turn = Range.clip(headingError * TURN_GAIN, -MAX_AUTO_TURN, MAX_AUTO_TURN);
+
+            // For mecanum we can also strafe if you have lateral offset info.
+            // If your AprilTag pose gave you a lateral X offset (e.g., found.ftcPose.x)
+            // you could compute a 'strafe' command. For now we'll keep strafe = 0.
+            double strafe = 0.0;
+
+            // Set mecanum: forward, strafe, rotate
+            setMecanumPower(drive, strafe, turn);
+
+            telemetry.addData("Tag", targetId);
+            telemetry.addData("Range", "%.2f (err %.2f)", range, rangeError);
+            telemetry.addData("Bearing", "%.2f (err %.2f)", bearing, headingError);
             telemetry.update();
-        
+
+            if (Math.abs(rangeError) <= RANGE_TOLERANCE && Math.abs(headingError) <= BEARING_TOLERANCE) {
+                stopAllDrivePower();
+                return true;
+            }
+
+            sleep(40);
         }
+
+        stopAllDrivePower();
+        return false;
     }
 
+    
+    private void setMecanumPower(double forward, double strafe, double rotate) {
+        double fl = forward + strafe + rotate;
+        double fr = forward - strafe - rotate;
+        double bl = forward - strafe + rotate;
+        double br = forward + strafe - rotate;
+        double max = Math.max(Math.max(Math.abs(fl), Math.abs(fr)), Math.max(Math.abs(bl), Math.abs(br)));
+        if (max > 1.0) {
+            fl /= max;
+            fr /= max;
+            bl /= max;
+            br /= max;
+        }
+
+        topL.setPower(fl);
+        topR.setPower(fr);
+        bottomL.setPower(bl);
+        bottomR.setPower(br);
+    }
+    
     // Method to drive forward or backward a given distance (in inches)
     public void driveForward(double inches, double power) {
         int ticks = inchesToTicks(inches);
@@ -288,92 +433,11 @@ public class BlueBackAutonomous extends LinearOpMode {
         for (int x : DESIRED_TAG_IDS) if (x == id) return true;
         return false;
     }
-    private boolean alignToTagAndCenter(int targetId, long timeoutMs) {
-        long start = System.currentTimeMillis();
-        while (opModeIsActive() && (System.currentTimeMillis() - start) < timeoutMs) {
-
-            // find the tag detection for our target ID
-            List<AprilTagDetection> detections = aprilTag.getDetections();
-            AprilTagDetection found = null;
-            for (AprilTagDetection d : detections) {
-                if (d.metadata != null && d.id == targetId && isDesiredTag(d.id)) {
-                    found = d;
-                    break;
-                }
-            }
-
-            if (found == null) {
-                // rotate slowly to search for tag
-                setTankPower(0.10, -0.10);
-                telemetry.addData("Searching", "for tag %d", targetId);
-                telemetry.update();
-                sleep(60);
-                continue;
-            }
-
-            double range = found.ftcPose.range;
-            double bearing = found.ftcPose.bearing;
-
-            double rangeError = range - DESIRED_DISTANCE_INCHES;
-            double headingError = bearing;
-
-            double drive = Range.clip(rangeError * SPEED_GAIN, -MAX_AUTO_SPEED, MAX_AUTO_SPEED);
-            double turn = Range.clip(headingError * TURN_GAIN, -MAX_AUTO_TURN, MAX_AUTO_TURN);
-
-            double left = drive - turn;
-            double right = drive + turn;
-
-            double max = Math.max(Math.abs(left), Math.abs(right));
-            if (max > 1.0) {
-                left /= max;
-                right /= max;
-            }
-
-            setTankPower(left, right);
-
-            telemetry.addData("Tag", targetId);
-            telemetry.addData("Range", "%.2f (err %.2f)", range, rangeError);
-            telemetry.addData("Bearing", "%.2f (err %.2f)", bearing, headingError);
-            telemetry.update();
-
-            if (Math.abs(rangeError) <= RANGE_TOLERANCE && Math.abs(headingError) <= BEARING_TOLERANCE) {
-                stopAllDrivePower();
-                return true;
-            }
-
-            sleep(40);
-        }
-
-        stopAllDrivePower();
-        return false;
-    }
-    
-    private void moveGpp() {
-        telemetry.addData("gpp", "called");
-        telemetry.update();
-    }
-    
-    private void movePpg() {
-        telemetry.addData("ppg", "called");
-        telemetry.update();
-    }
-    
-    private void movePgp() {
-        telemetry.addData("pgp", "called");
-        telemetry.update();
-    }
-    
-    private void setTankPower(double left, double right) {
-        topL.setPower(left);
-        bottomL.setPower(left);
-        topR.setPower(right);
-        bottomR.setPower(right);
-    }
 
     private void stopAllDrivePower() {
-        setTankPower(0, 0);
+        setMecanumPower(0.0, 0.0, 0.0);
     }
-  
+
     private void setManualExposure(int exposureMS, int gain) {
         if (visionPortal == null) return;
 
