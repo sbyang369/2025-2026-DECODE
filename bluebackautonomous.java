@@ -94,7 +94,7 @@ public class BlueBackAutonomous extends LinearOpMode {
                 telemetry.update();
 
                 long searchStart = System.currentTimeMillis();
-                long searchTimeoutMs = 80000; // search up to 8s
+                long searchTimeoutMs = 8000; // search up to 8s
                 while (opModeIsActive() && (System.currentTimeMillis() - searchStart) < searchTimeoutMs && !isDesiredTag(seenTagId)) {
                     List<AprilTagDetection> detections = aprilTag.getDetections();
                     for (AprilTagDetection d : detections) {
@@ -131,8 +131,6 @@ public class BlueBackAutonomous extends LinearOpMode {
                 telemetry.update();
             }
         
-            stopAllDrivePower();
-            telemetry.addLine("Test complete.");
             telemetry.update();
         
         }
