@@ -132,7 +132,7 @@ public class BlueBackAutonomous extends LinearOpMode {
                     sleep(60);
                 } else {
                     // No detections: rotate slowly in place to sweep camera
-                    setTankPower(TURN_SEARCH_POWER, -TURN_SEARCH_POWER);
+                    setMecanumPower(0.0, 0.0, TURN_SEARCH_POWER);
                     telemetry.addLine("No tags seen — rotating to scan...");
                     telemetry.update();
                     sleep(60); // give the robot time to rotate and camera time to capture
