@@ -88,38 +88,52 @@ public void runOpMode() {
     // --- 1. Drive forward while scanning ---
     driveForward(25, 0.5); // Move forward a safe distance
 
-    // --- 2. Check if tag was seen prestart ---
-    if (seenTagId < 0 || !isDesiredTag(seenTagId)) {
-        telemetry.addLine("No tag seen prestart — scanning now...");
-        telemetry.update();
+// ---------- Replace the search loop (inside runOpMode) with this ----------
+if (seenTagId < 0 || !isDesiredTag(seenTagId)) {
+    telemetry.addLine("No tag seen prestart — scanning now...");
+    telemetry.update();
 
-        long searchStart = System.currentTimeMillis();
-        long searchTimeoutMs = 15000; // 15s scan
-        final double TURN_SEARCH_POWER = 0.12;
+    long searchStart = System.currentTimeMillis();
+    long searchTimeoutMs = 15000; // 15s scan
+    final double TURN_SEARCH_POWER = 0.12; // try 0.12; increase to 0.18-0.20 if too slow
 
-        while (opModeIsActive() && (System.currentTimeMillis() - searchStart) < searchTimeoutMs
-                && !isDesiredTag(seenTagId)) {
+    // Continuous-sweep approach: keep rotating until we see a desired tag or timeout
+    while (opModeIsActive() && (System.currentTimeMillis() - searchStart) < searchTimeoutMs
+            && !isDesiredTag(seenTagId)) {
 
-            List<AprilTagDetection> detections = aprilTag.getDetections();
+        List<AprilTagDetection> detections = aprilTag.getDetections();
 
-            if (detections != null && !detections.isEmpty()) {
-                stopAllDrivePower();
-                for (AprilTagDetection d : detections) {
-                    if (d.metadata != null && isDesiredTag(d.id)) {
-                        seenTagId = d.id;
-                        telemetry.addData("Tag found", seenTagId);
-                        telemetry.update();
-                        break;
-                    }
+        if (detections != null && !detections.isEmpty()) {
+            // check each detection for desired id
+            for (AprilTagDetection d : detections) {
+                if (d != null && isDesiredTag(d.id)) {
+                    seenTagId = d.id;
+                    telemetry.addData("Tag found", seenTagId);
+                    telemetry.update();
+                    break;
                 }
-            } else {
-                // Rotate slowly to sweep
-                setMecanumPower(0.0, 0.0, TURN_SEARCH_POWER);
-                sleep(50);
-                stopAllDrivePower();
             }
+
+            // if we found a tag, break the loop; otherwise keep rotating
+            if (isDesiredTag(seenTagId)) {
+                break;
+            } else {
+                // give the pipeline a little time to process frames while rotating
+                setMecanumPower(0.0, 0.0, TURN_SEARCH_POWER);
+                sleep(120);
+            }
+        } else {
+            // No detections → keep rotating continuously (don't stop every short pulse)
+            setMecanumPower(0.0, 0.0, TURN_SEARCH_POWER);
+            telemetry.addLine("Rotating to search...");
+            telemetry.update();
+            // sleep a bit to let the motion happen and the vision pipeline update
+            sleep(120);
         }
     }
+    stopAllDrivePower();
+}
+
 
     // --- 3. Center on the tag ---
     if (seenTagId >= 0 && isDesiredTag(seenTagId)) {
