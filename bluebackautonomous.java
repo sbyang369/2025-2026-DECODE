@@ -120,7 +120,7 @@ public class BlueBackAutonomous extends LinearOpMode {
                         telemetry.addData("seen", "%d (%s)", d.id, d.metadata != null ? d.metadata.name : "no-meta");
 
                         // ONLY record the tag id here — do NOT call move* yet
-                        if (d.metadata != null && isDesiredTag(d.id)) {
+                        if (isDesiredTag(d.id)) {
                             seenTagId = d.id;
                             telemetry.addData("chosen", seenTagId);
                             telemetry.update();
