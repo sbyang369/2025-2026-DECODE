@@ -87,112 +87,128 @@ public class BlueBackAutonomous extends LinearOpMode {
         telemetry.update();
 
 
-    if (opModeIsActive()) {
-        //sleep(100);
+    if (!opModeIsActive()) {
+        // If opmode was stopped during waitForStart
+        return;
+    }
 
-        // Approach Obelisk 
-        //driveForward(100, 0.5);
-        //turnLeft(160,0.5);
+    // --- Start scanning + fallback block ---
+    if (seenTagId < 0 || !isDesiredTag(seenTagId)) {
+        telemetry.addLine("No desired prestart tag — searching during run...");
+        telemetry.update();
 
-        // --- Start scanning + fallback block ---
-        if (seenTagId < 0 || !isDesiredTag(seenTagId)) {
-            telemetry.addLine("No desired prestart tag — searching during run...");
-            telemetry.update();
+        long searchStart = System.currentTimeMillis();
+        long searchTimeoutMs = 15000; // search up to 15s
+        final double TURN_SEARCH_POWER = 0.12;
+        boolean foundDesired = false;
 
-            long searchStart = System.currentTimeMillis();
-            long searchTimeoutMs = 15000; // search up to 15s
-            final double TURN_SEARCH_POWER = 0.12;  
+        // rotate/scan loop
+        while (opModeIsActive()
+                && (System.currentTimeMillis() - searchStart) < searchTimeoutMs
+                && !foundDesired) {
 
-            // rotate/scan loop
-            while (opModeIsActive()
-                    && (System.currentTimeMillis() - searchStart) < searchTimeoutMs
-                    && !isDesiredTag(seenTagId)) {
+            List<AprilTagDetection> detections = aprilTag.getDetections();
 
-                List<AprilTagDetection> detections = aprilTag.getDetections();
+            if (detections != null && !detections.isEmpty()) {
+                // We saw something — stop rotating and process detections
+                stopAllDrivePower();
+                telemetry.addLine("Detections seen; processing...");
+                telemetry.update();
 
-                if (detections != null && !detections.isEmpty()) {
-                    // We saw something — stop rotating and process detections
-                    stopAllDrivePower();
-                    telemetry.addLine("Detections seen; processing...");
+                for (AprilTagDetection d : detections) {
+                    telemetry.addData("seen", "%d (%s)", d.id, d.metadata != null ? d.metadata.name : "no-meta");
                     telemetry.update();
 
-                    for (AprilTagDetection d : detections) {
-                        telemetry.addData("seen", "%d (%s)", d.id, d.metadata != null ? d.metadata.name : "no-meta");
-
-                        // ONLY record the tag id here — do NOT call move* yet
-                        if (isDesiredTag(d.id)) {
-                            seenTagId = d.id;
-                            telemetry.addData("chosen", seenTagId);
-                            telemetry.update();
-                            break;
-                        }
+                    if (isDesiredTag(d.id)) {
+                        seenTagId = d.id;
+                        telemetry.addData("chosen", seenTagId);
+                        telemetry.update();
+                        foundDesired = true;
+                        break; // break the for-loop
                     }
-
-                    // allow the vision pipeline a short moment to stabilize
-                    sleep(60);
-                } else {
-                    // No detections: rotate slowly in place to sweep camera
-             //       setMecanumPower(0.0, 0.0, TURN_SEARCH_POWER);
-                    telemetry.addLine("No tags seen — rotating to scan...");
-                    telemetry.update();
-                    sleep(60); // give the robot time to rotate and camera time to capture
-                    stopAllDrivePower();
                 }
 
-                telemetry.update();
-            } // end while scanning
+                // allow the vision pipeline a short moment to stabilize
+                sleep(60);
 
-            // stop any motion left over from scanning
-            stopAllDrivePower();
+                // If we found one, break the outer while immediately
+                if (foundDesired) {
+                    break;
+                }
+            } else {
+                // No detections: rotate slowly in place to sweep camera
+                // Uncomment the line below to physically rotate your robot while scanning:
+                // setMecanumPower(0.0, 0.0, TURN_SEARCH_POWER);
+                telemetry.addLine("No tags seen — rotating to scan (virtual)...");
+                telemetry.update();
+                sleep(60); // give the robot time to rotate and camera time to capture
+                stopAllDrivePower();
+            }
+        } // end while scanning
+
+        // stop any motion left over from scanning
+        stopAllDrivePower();
+        telemetry.addData("POST-SCAN seenTagId", seenTagId >= 0 ? seenTagId : "none");
+        telemetry.update();
+
+        // If nothing found after timeout, perform encoder backup fallback (optional)
+        if (seenTagId < 0 || !isDesiredTag(seenTagId)) {
+            telemetry.addLine("No tag found after scanning — performing encoder backup fallback");
             telemetry.update();
 
-            // If nothing found after timeout, perform encoder backup fallback
-            if (seenTagId < 0 || !isDesiredTag(seenTagId)) {
-                telemetry.addLine("No tag found after scanning — performing encoder backup fallback");
-                telemetry.update();
-
-                // negative distance -> drive backward using encoders
-             //   driveForward(-15, 0.5); // tune distance & power as needed
-            }
+            // Optionally try a small encoder move to reposition: (uncomment to use)
+            // driveForward(-15, 0.5); // tune distance & power as needed
         }
-        
-        // proceed to alignment if tag found
-        if (seenTagId >= 0 && isDesiredTag(seenTagId)) {
-        //    telemetry.addData("Tag to align to", seenTagId);
-       //     telemetry.update();
+    } else {
+        // We already had a prestart tag
+        telemetry.addData("Using prestart tag", seenTagId);
+        telemetry.update();
+    }
 
-     //       boolean success = alignToTagAndCenter(seenTagId, 6000);
-        //    telemetry.addData("Align result", success ? "Centered" : "Timed out");
+    // proceed to alignment or direct tag action if tag found
+    if (seenTagId >= 0 && isDesiredTag(seenTagId)) {
+        telemetry.addData("Tag to act on", seenTagId);
+        telemetry.update();
 
-         //   if (success) {
+        // Try aligning first (uncomment if you want to attempt align; otherwise call move* directly)
+        // boolean success = alignToTagAndCenter(seenTagId, 6000);
+        // telemetry.addData("Align result", success ? "Centered" : "Timed out");
+        // telemetry.update();
+
+        // call tag-based behaviors inside try/catch so we report any exceptions
+        try {
             if (seenTagId == 21) {
-                telemetry.addLine("ID 21 IS SEEN! FUNCTION WAS CALLED");
+                telemetry.addLine("ID 21 IS SEEN! CALLING moveGpp()");
+                telemetry.update();
                 moveGpp();
             } else if (seenTagId == 23) {
-                telemetry.addLine("ID 23 IS SEEN! FUNCTION WAS CALLED");
+                telemetry.addLine("ID 23 IS SEEN! CALLING movePpg()");
+                telemetry.update();
                 movePpg();
             } else if (seenTagId == 22) {
-                telemetry.addLine("ID 22 IS SEEN! FUNCTION WAS CALLED");
+                telemetry.addLine("ID 22 IS SEEN! CALLING movePgp()");
+                telemetry.update();
                 movePgp();
             } else {
-                telemetry.addLine("Alignment timed out; not executing tag-based functions.");
+                telemetry.addData("Unknown tag id after scan", seenTagId);
+                telemetry.update();
             }
-            
+        } catch (Exception e) {
+            telemetry.addData("EXCEPTION in tag-action", e.toString());
             telemetry.update();
-            
-     //   } else {
-        //    telemetry.addLine("No desired tag found — ending test.");
-     //       telemetry.update();
-     //   }
-
-        stopAllDrivePower();
-        telemetry.addLine("Test complete.");
-        telemetry.update();
-    
         }
-    }
-}
 
+    } else {
+        telemetry.addLine("No desired tag to act on — finishing opmode.");
+        telemetry.update();
+    }
+
+    // Final cleanup
+    stopAllDrivePower();
+    telemetry.addLine("Test complete.");
+    telemetry.update();
+}
+    
     private void moveGpp() {
         telemetry.addData("gpp", "called");
         telemetry.update();
