@@ -151,63 +151,43 @@ public class BlueBackAutonomous extends LinearOpMode {
         telemetry.addData("POST-SCAN seenTagId", seenTagId >= 0 ? seenTagId : "none");
         telemetry.update();
 
-        // If nothing found after timeout, perform encoder backup fallback (optional)
-        if (seenTagId < 0 || !isDesiredTag(seenTagId)) {
-            telemetry.addLine("No tag found after scanning — performing encoder backup fallback");
-            telemetry.update();
-
-            // Optionally try a small encoder move to reposition: (uncomment to use)
-            // driveForward(-15, 0.5); // tune distance & power as needed
-        }
-    } else {
-        // We already had a prestart tag
-        telemetry.addData("Using prestart tag", seenTagId);
-        telemetry.update();
-    }
-
-    // proceed to alignment or direct tag action if tag found
     if (seenTagId >= 0 && isDesiredTag(seenTagId)) {
-        telemetry.addData("Tag to act on", seenTagId);
+        telemetry.addData("Debug: Tag found, proceeding with ID", seenTagId);
         telemetry.update();
 
-        // Try aligning first (uncomment if you want to attempt align; otherwise call move* directly)
-        // boolean success = alignToTagAndCenter(seenTagId, 6000);
-        // telemetry.addData("Align result", success ? "Centered" : "Timed out");
-        // telemetry.update();
-
-        // call tag-based behaviors inside try/catch so we report any exceptions
-        try {
-            if (seenTagId == 21) {
-                telemetry.addLine("ID 21 IS SEEN! CALLING moveGpp()");
-                telemetry.update();
-                moveGpp();
-            } else if (seenTagId == 23) {
-                telemetry.addLine("ID 23 IS SEEN! CALLING movePpg()");
-                telemetry.update();
-                movePpg();
-            } else if (seenTagId == 22) {
-                telemetry.addLine("ID 22 IS SEEN! CALLING movePgp()");
-                telemetry.update();
-                movePgp();
-            } else {
-                telemetry.addData("Unknown tag id after scan", seenTagId);
-                telemetry.update();
-            }
-        } catch (Exception e) {
-            telemetry.addData("EXCEPTION in tag-action", e.toString());
+        if (seenTagId == 21) {
+            telemetry.addLine("Debug: ID 21 IS SEEN! Calling moveGpp()");
+            telemetry.update();
+            moveGpp(); // <-- This function should now be called
+            telemetry.addLine("Debug: Returned from moveGpp()");
+            telemetry.update();
+        } else if (seenTagId == 23) {
+            telemetry.addLine("Debug: ID 23 IS SEEN! Calling movePpg()");
+            telemetry.update();
+            movePpg(); // <-- This function should now be called
+            telemetry.addLine("Debug: Returned from movePpg()");
+            telemetry.update();
+        } else if (seenTagId == 22) {
+            telemetry.addLine("Debug: ID 22 IS SEEN! Calling movePgp()");
+            telemetry.update();
+            movePgp(); // <-- This function should now be called
+            telemetry.addLine("Debug: Returned from movePgp()");
+            telemetry.update();
+        } else {
+            telemetry.addData("Debug: Unknown tag id after scan", seenTagId);
             telemetry.update();
         }
-
     } else {
-        telemetry.addLine("No desired tag to act on — finishing opmode.");
+        telemetry.addLine("Debug: Tag not found or not desired after scan.");
         telemetry.update();
     }
 
     // Final cleanup
-    stopAllDrivePower();
-    telemetry.addLine("Test complete.");
+    telemetry.addData("END: Tag is", seenTagId);
     telemetry.update();
+    }
 }
+
     
     private void moveGpp() {
         telemetry.addData("gpp", "called");
