@@ -1,7 +1,5 @@
-//test this code! if it doesn't work go back to the old one
-// should: 1) move forward 2) rotate until it detects the apriltag 3) align to the apriltag
-//will want to get the game field set up first before doing
-
+//it looks like the functions are working
+// movement is not straight, maybe bc there is a motor causing an imbalance on the right side
 package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
@@ -29,7 +27,12 @@ public class BlueBackAutonomous extends LinearOpMode {
     private DcMotor bottomR = null;
     private DcMotor topL = null;
     private DcMotor topR = null;
-    
+    private DcMotor rightIntake = null;
+    private DcMotor leftIntake = null;
+    private DcMotor rightOutake = null;
+    private DcMotor leftOutake = null;
+    //private CRServo wrist = null;
+
     private static final boolean USE_WEBCAM = true; // true if using Webcam 1
     private static final int[] DESIRED_TAG_IDS = {21, 22, 23};
     private VisionPortal visionPortal;
@@ -48,32 +51,75 @@ public class BlueBackAutonomous extends LinearOpMode {
 
     @Override
     public void runOpMode() {
+        telemetry.addLine("RunOpMode: start init");
+        telemetry.update();
+
         // Initialize the hardware variables
-        topL = hardwareMap.get(DcMotor.class, "topL");
-        topR = hardwareMap.get(DcMotor.class, "topR");
-        bottomL = hardwareMap.get(DcMotor.class, "bottomL");
-        bottomR = hardwareMap.get(DcMotor.class, "bottomR");
+        try {
+            topL = hardwareMap.get(DcMotor.class, "topL");
+            topR = hardwareMap.get(DcMotor.class, "topR");
+            bottomL = hardwareMap.get(DcMotor.class, "bottomL");
+            bottomR = hardwareMap.get(DcMotor.class, "bottomR");
+            
+            leftIntake = hardwareMap.get(DcMotor.class, "leftIntake");
+            rightIntake = hardwareMap.get(DcMotor.class, "rightIntake");
+            leftOutake = hardwareMap.get(DcMotor.class, "leftOutake");
+            rightOutake = hardwareMap.get(DcMotor.class, "rightOutake");
+            
+            //wrist = hardwareMap.get(CRServo.class,"wrist");
+        } catch (Exception e) {
+            telemetry.addData("ERROR", "hardwareMap lookup failed: %s", e.toString());
+            telemetry.update();
+            // don't return — we still want to see vision telemetry if possible
+        }
 
-        // Reverse motor direction
-        bottomL.setDirection(DcMotor.Direction.REVERSE);
-        topL.setDirection(DcMotor.Direction.REVERSE);
-        topR.setDirection(DcMotor.Direction.FORWARD); 
+        // Reverse motor direction where appropriate
+        try {
+            if (bottomL != null) bottomL.setDirection(DcMotor.Direction.REVERSE);
+            if (topL != null) topL.setDirection(DcMotor.Direction.REVERSE);
+            if (topR != null) topR.setDirection(DcMotor.Direction.FORWARD);
+        } catch (Exception e) {
+            telemetry.addData("WARN", "couldn't set motor direction: %s", e.toString());
+            telemetry.update();
+        }
 
-        // Set all motors to use encoders
-        topL.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        topR.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        bottomL.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        bottomR.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        topL.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        topR.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        bottomL.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        bottomR.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        
-        initAprilTag();
-        if (USE_WEBCAM) setManualExposure(6, 250);
+        // Reset encoders (safe guarded)
+        try {
+            if (topL != null) topL.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+            if (topR != null) topR.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+            if (bottomL != null) bottomL.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+            if (bottomR != null) bottomR.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+
+            if (topL != null) topL.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+            if (topR != null) topR.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+            if (bottomL != null) bottomL.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+            if (bottomR != null) bottomR.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        } catch (Exception e) {
+            telemetry.addData("WARN", "encoder/reset failed: %s", e.toString());
+            telemetry.update();
+        }
+
+        // Init vision
+        telemetry.addLine("initAprilTag()");
+        telemetry.update();
+        try {
+            initAprilTag();
+        } catch (Exception e) {
+            telemetry.addData("ERROR", "initAprilTag failed: %s", e.toString());
+            telemetry.update();
+        }
+
+        if (USE_WEBCAM) {
+            telemetry.addLine("Setting manual exposure...");
+            telemetry.update();
+            // This could block if camera never streams; so we log progress inside
+            setManualExposure(6, 250);
+        }
 
         telemetry.addLine("Initialized. Scanning for desired tags (21/22/23) pre-start...");
         telemetry.update();
+
+        // Pre-start sample
         sampleTagBeforeStart(1.5);
 
         telemetry.addData("Prestart seenTagId", seenTagId >= 0 ? seenTagId : "none");
@@ -83,144 +129,196 @@ public class BlueBackAutonomous extends LinearOpMode {
         waitForStart();
         runtime.reset();
 
-        telemetry.addData("Status", "Initialized");
+        telemetry.addData("Status", "After start - Initialized");
+        telemetry.addData("seenTagId (post-start)", seenTagId >= 0 ? seenTagId : "none");
         telemetry.update();
 
+        if (!opModeIsActive()) {
+            telemetry.addLine("opMode not active after start -> exit");
+            telemetry.update();
+            return;
+        }
+        
+        // APPROACH OBELISK
+        //driveForward(-70,0.5);
+        //turnRight(115,0.5);
+        //driveForward(-35,0.5);
+        //turnLeft(115,0.5);
+        //driveForward(-20,0.5);
+        
+        turnLeft(130,0.5);
+        driveForward(-20,0.5);
+        
+        turnRight(130,0.5);
+        driveForward(-105,0.5);
+        
+        turnLeft(50,0.5);
+        
+        // Shoot
+        
+        rightOutake.setPower(0.99);
+        leftOutake.setPower(-0.99);
+        sleep(200); //might need to adjust
+        rightOutake.setPower(0);
+        leftOutake.setPower(0);
 
-    if (!opModeIsActive()) {
-        // If opmode was stopped during waitForStart
-        return;
-    }
+        // If we didn't see a tag prestart, try scanning during run
+        if (seenTagId < 0 || !isDesiredTag(seenTagId)) {
+            telemetry.addLine("No desired prestart tag — scanning during run...");
+            telemetry.update();
 
-    // --- Start scanning + fallback block ---
-    if (seenTagId < 0 || !isDesiredTag(seenTagId)) {
-        telemetry.addLine("No desired prestart tag — searching during run...");
-        telemetry.update();
+            long searchStart = System.currentTimeMillis();
+            long searchTimeoutMs = 15000; // search up to 15s
+            boolean foundDesired = false;
+            int loopCount = 0;
 
-        long searchStart = System.currentTimeMillis();
-        long searchTimeoutMs = 15000; // search up to 15s
-        final double TURN_SEARCH_POWER = 0.12;
-        boolean foundDesired = false;
+            while (opModeIsActive()
+                    && (System.currentTimeMillis() - searchStart) < searchTimeoutMs
+                    && !foundDesired) {
 
-        // rotate/scan loop
-        while (opModeIsActive()
-                && (System.currentTimeMillis() - searchStart) < searchTimeoutMs
-                && !foundDesired) {
+                loopCount++;
+                List<AprilTagDetection> detections = null;
+                try {
+                    detections = aprilTag == null ? null : aprilTag.getDetections();
+                } catch (Exception e) {
+                    telemetry.addData("vision-ex", "getDetections threw: %s", e.toString());
+                    telemetry.update();
+                    // short sleep and continue so we can see logs
+                    sleep(50);
+                    continue;
+                }
 
-            List<AprilTagDetection> detections = aprilTag.getDetections();
-
-            if (detections != null && !detections.isEmpty()) {
-                // We saw something — stop rotating and process detections
-                stopAllDrivePower();
-                telemetry.addLine("Detections seen; processing...");
+                telemetry.addData("scan-loop", "%d, detections=%s", loopCount, detections == null ? "null" : detections.size());
                 telemetry.update();
 
-                for (AprilTagDetection d : detections) {
-                    telemetry.addData("seen", "%d (%s)", d.id, d.metadata != null ? d.metadata.name : "no-meta");
+                if (detections != null && !detections.isEmpty()) {
+                    stopAllDrivePower();
+                    telemetry.addLine("Detections seen; processing...");
                     telemetry.update();
 
-                    if (isDesiredTag(d.id)) {
-                        seenTagId = d.id;
-                        telemetry.addData("chosen", seenTagId);
+                    for (AprilTagDetection d : detections) {
+                        if (d == null) continue;
+                        telemetry.addData("seen", "%d (%s)", d.id, d.metadata != null ? d.metadata.name : "no-meta");
                         telemetry.update();
-                        foundDesired = true;
-                        break; // break the for-loop
+
+                        if (isDesiredTag(d.id)) {
+                            seenTagId = d.id;
+                            telemetry.addData("chosen", seenTagId);
+                            
+                            telemetry.update();
+                            foundDesired = true;
+                            break;
+                        }
                     }
+
+                    // Give the pipeline a moment
+                    sleep(60);
+
+                    if (foundDesired) break;
+                } else {
+                    // rotate slowly in-place — for safety we do not actually drive here unless
+                    // you uncomment the setMecanumPower line.
+                    telemetry.addLine("No tags seen — (virtual rotate)");
+                    telemetry.update();
+                    sleep(150);
                 }
+            } // scan while
 
-                // allow the vision pipeline a short moment to stabilize
-                sleep(60);
-
-                // If we found one, break the outer while immediately
-                if (foundDesired) {
-                    break;
-                }
-            } else {
-                // No detections: rotate slowly in place to sweep camera
-                // Uncomment the line below to physically rotate your robot while scanning:
-                // setMecanumPower(0.0, 0.0, TURN_SEARCH_POWER);
-                telemetry.addLine("No tags seen — rotating to scan (virtual)...");
-                telemetry.update();
-                sleep(60); // give the robot time to rotate and camera time to capture
-                stopAllDrivePower();
-            }
-        } // end while scanning
-
-        // stop any motion left over from scanning
-        stopAllDrivePower();
-        telemetry.addData("POST-SCAN seenTagId", seenTagId >= 0 ? seenTagId : "none");
-        telemetry.update();
-
-    if (seenTagId >= 0 && isDesiredTag(seenTagId)) {
-        telemetry.addData("Debug: Tag found, proceeding with ID", seenTagId);
-        telemetry.update();
-
-        if (seenTagId == 21) {
-            telemetry.addLine("Debug: ID 21 IS SEEN! Calling moveGpp()");
-            telemetry.update();
-            moveGpp(); // <-- This function should now be called
-            telemetry.addLine("Debug: Returned from moveGpp()");
-            telemetry.update();
-        } else if (seenTagId == 23) {
-            telemetry.addLine("Debug: ID 23 IS SEEN! Calling movePpg()");
-            telemetry.update();
-            movePpg(); // <-- This function should now be called
-            telemetry.addLine("Debug: Returned from movePpg()");
-            telemetry.update();
-        } else if (seenTagId == 22) {
-            telemetry.addLine("Debug: ID 22 IS SEEN! Calling movePgp()");
-            telemetry.update();
-            movePgp(); // <-- This function should now be called
-            telemetry.addLine("Debug: Returned from movePgp()");
+            stopAllDrivePower();
+            telemetry.addData("POST-SCAN seenTagId", seenTagId >= 0 ? seenTagId : "none");
             telemetry.update();
         } else {
-            telemetry.addData("Debug: Unknown tag id after scan", seenTagId);
+            telemetry.addData("Info", "We saw a desired tag prestart: %d", seenTagId);
             telemetry.update();
         }
-    } else {
-        telemetry.addLine("Debug: Tag not found or not desired after scan.");
+
+        // Now process whichever tag we have (prestart or scan)
+        telemetry.addLine("Processing tag decision now...");
+        telemetry.update();
+
+        if (seenTagId >= 0 && isDesiredTag(seenTagId)) {
+            telemetry.addData("Debug: Tag found, proceeding with ID", seenTagId);
+            telemetry.update();
+
+            if (seenTagId == 21) {
+                telemetry.addLine("Debug: ID 21 IS SEEN! Calling moveGpp()");
+                telemetry.update();
+                moveGpp();
+            } else if (seenTagId == 23) {
+                telemetry.addLine("Debug: ID 23 IS SEEN! Calling movePpg()");
+                telemetry.update();
+                movePpg();
+            } else if (seenTagId == 22) {
+                telemetry.addLine("Debug: ID 22 IS SEEN! Calling movePgp()");
+                telemetry.update();
+                movePgp();
+            } else {
+                telemetry.addData("Debug: Unknown tag id after scan", seenTagId);
+                telemetry.update();
+            }
+        } else {
+            telemetry.addLine("Debug: Tag not found or not desired after scan.");
+            telemetry.update();
+        }
+        
+        // Final cleanup (printed after the check)
+        telemetry.addData("END: Tag is", seenTagId);
+        telemetry.addData("DBG - final runtime(s)", "%.3f", runtime.seconds());
         telemetry.update();
     }
 
-    // Final cleanup
-    telemetry.addData("END: Tag is", seenTagId);
-    telemetry.update();
-    }
-}
-
-    
+    // ---- small helper movement functions ----
     private void moveGpp() {
-        telemetry.addData("gpp", "called");
+        telemetry.addData("moveGpppppppppppppp", "called");
         telemetry.update();
-    }
-    
-    private void movePpg() {
-        telemetry.addData("ppg", "called");
-        telemetry.update();
-    }
-    
-    private void movePgp() {
-        telemetry.addData("pgp", "called");
+        // Insert robot motion you want here. For debugging, we keep it simple.
+        sleep(200);
+        telemetry.addLine("moveGpp: done");
         telemetry.update();
     }
 
-        private boolean alignToTagAndCenter(int targetId, long timeoutMs) {
+    private void movePpg() {
+        telemetry.addData("movePpggggggggggggggg", "called");
+        telemetry.update();
+        sleep(200);
+        telemetry.addLine("movePpg: done");
+        telemetry.update();
+    }
+
+    private void movePgp() {
+        telemetry.addData("movePgppppppppppppppppppp", "called");
+        driveForward(5,0.5);
+        telemetry.update();
+        sleep(200);
+        telemetry.addLine("movePgp: done");
+        telemetry.update();
+    }
+
+    private boolean alignToTagAndCenter(int targetId, long timeoutMs) {
         long start = System.currentTimeMillis();
         while (opModeIsActive() && (System.currentTimeMillis() - start) < timeoutMs) {
-            List<AprilTagDetection> detections = aprilTag.getDetections();
+            List<AprilTagDetection> detections = null;
+            try {
+                detections = aprilTag == null ? null : aprilTag.getDetections();
+            } catch (Exception e) {
+                telemetry.addData("align-getDet", "ex: %s", e.toString());
+                telemetry.update();
+            }
+
             AprilTagDetection found = null;
-            for (AprilTagDetection d : detections) {
-                if (d.metadata != null && d.id == targetId && isDesiredTag(d.id)) {
-                    found = d;
-                    break;
+            if (detections != null) {
+                for (AprilTagDetection d : detections) {
+                    if (d == null) continue;
+                    if (d.id == targetId && isDesiredTag(d.id)) {
+                        found = d;
+                        break;
+                    }
                 }
             }
 
             if (found == null) {
-                // rotate slowly to search for tag (mecanum rotate only)
-                // Positive rotate value may rotate one direction; invert sign if needed.
-                setMecanumPower(0.0, 0.0, 0.005); // rotate in place
-                telemetry.addData("Searching", "for tag %d", targetId);
+                setMecanumPower(0.0, 0.0, 0.005);
+                telemetry.addData("Searching", "for tag %d (detections=%s)", targetId, detections == null ? "null" : detections.size());
                 telemetry.update();
                 sleep(40);
                 continue;
@@ -235,12 +333,8 @@ public class BlueBackAutonomous extends LinearOpMode {
             double drive = Range.clip(rangeError * SPEED_GAIN, -MAX_AUTO_SPEED, MAX_AUTO_SPEED);
             double turn = Range.clip(headingError * TURN_GAIN, -MAX_AUTO_TURN, MAX_AUTO_TURN);
 
-            // For mecanum we can also strafe if you have lateral offset info.
-            // If your AprilTag pose gave you a lateral X offset (e.g., found.ftcPose.x)
-            // you could compute a 'strafe' command. For now we'll keep strafe = 0.
             double strafe = 0.0;
 
-            // Set mecanum: forward, strafe, rotate
             setMecanumPower(drive, strafe, turn);
 
             telemetry.addData("Tag", targetId);
@@ -260,8 +354,14 @@ public class BlueBackAutonomous extends LinearOpMode {
         return false;
     }
 
-    
     private void setMecanumPower(double forward, double strafe, double rotate) {
+        if (topL == null || topR == null || bottomL == null || bottomR == null) {
+            // hardware missing — just log
+            telemetry.addData("setMecanumPower", "missing motor(s)");
+            telemetry.update();
+            return;
+        }
+
         double fl = forward + strafe + rotate;
         double fr = forward - strafe - rotate;
         double bl = forward - strafe + rotate;
@@ -279,9 +379,15 @@ public class BlueBackAutonomous extends LinearOpMode {
         bottomL.setPower(bl);
         bottomR.setPower(br);
     }
-    
-    // Method to drive forward or backward a given distance (in inches)
+
     public void driveForward(double inches, double power) {
+        // unchanged but safe-guard motors
+        if (topL == null || topR == null || bottomL == null || bottomR == null) {
+            telemetry.addData("driveForward", "missing motor(s)");
+            telemetry.update();
+            return;
+        }
+
         int ticks = inchesToTicks(inches);
 
         topL.setTargetPosition(topL.getCurrentPosition() + ticks);
@@ -307,8 +413,13 @@ public class BlueBackAutonomous extends LinearOpMode {
         stopMotors();
     }
 
-    // Method to turn left a given angle (in degrees)
     public void turnLeft(double degrees, double power) {
+        if (topL == null || topR == null || bottomL == null || bottomR == null) {
+            telemetry.addData("turnLeft", "missing motor(s)");
+            telemetry.update();
+            return;
+        }
+
         int ticks = degreesToTicks(degrees);
 
         topL.setTargetPosition(topL.getCurrentPosition() - ticks);
@@ -334,8 +445,13 @@ public class BlueBackAutonomous extends LinearOpMode {
         stopMotors();
     }
 
-    // Method to turn right a given angle (in degrees)
     public void turnRight(double degrees, double power) {
+        if (topL == null || topR == null || bottomL == null || bottomR == null) {
+            telemetry.addData("turnRight", "missing motor(s)");
+            telemetry.update();
+            return;
+        }
+
         int ticks = degreesToTicks(degrees);
 
         topL.setTargetPosition(topL.getCurrentPosition() + ticks);
@@ -361,71 +477,105 @@ public class BlueBackAutonomous extends LinearOpMode {
         stopMotors();
     }
 
-    // Method to stop all motors
     private void stopMotors() {
-        topL.setPower(0);
-        topR.setPower(0);
-        bottomL.setPower(0);
-        bottomR.setPower(0);
+        if (topL != null) topL.setPower(0);
+        if (topR != null) topR.setPower(0);
+        if (bottomL != null) bottomL.setPower(0);
+        if (bottomR != null) bottomR.setPower(0);
 
-        topL.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        topR.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        bottomL.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        bottomR.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        if (topL != null) topL.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        if (topR != null) topR.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        if (bottomL != null) bottomL.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        if (bottomR != null) bottomR.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
     }
 
-    // Helper method to convert inches to encoder ticks
     private int inchesToTicks(double inches) {
-        final double TICKS_PER_REV = 537.6;  // Example: GoBILDA 5202 motor
-        final double WHEEL_DIAMETER = 4.0;  // In inches
+        final double TICKS_PER_REV = 537.6;
+        final double WHEEL_DIAMETER = 4.0;
         final double CIRCUMFERENCE = Math.PI * WHEEL_DIAMETER;
         return (int) ((inches / CIRCUMFERENCE) * TICKS_PER_REV);
     }
 
-    // Helper method to convert degrees to encoder ticks
     private int degreesToTicks(double degrees) {
-        final double ROBOT_DIAMETER = 18.0;  // Example robot diameter in inches
+        final double ROBOT_DIAMETER = 18.0;
         final double ROBOT_CIRCUMFERENCE = Math.PI * ROBOT_DIAMETER;
         double distance = (degrees / 360.0) * ROBOT_CIRCUMFERENCE;
         return inchesToTicks(distance);
     }
 
-   // -----------------------
-    // VISION helpers
-    // -----------------------
+    // ------------
+    // Vision helpers
+    // ------------
     private void initAprilTag() {
         aprilTag = new AprilTagProcessor.Builder().build();
         aprilTag.setDecimation(2);
 
         if (USE_WEBCAM) {
-            visionPortal = new VisionPortal.Builder()
-                    .setCamera(hardwareMap.get(WebcamName.class, "Webcam 1"))
-                    .addProcessor(aprilTag)
-                    .build();
+            try {
+                visionPortal = new VisionPortal.Builder()
+                        .setCamera(hardwareMap.get(WebcamName.class, "Webcam 1"))
+                        .addProcessor(aprilTag)
+                        .build();
+            } catch (Exception e) {
+                telemetry.addData("vision-init", "webcam init failed: %s", e.toString());
+                telemetry.update();
+                visionPortal = null;
+            }
         } else {
-            visionPortal = new VisionPortal.Builder()
-                    .setCamera(BuiltinCameraDirection.BACK)
-                    .addProcessor(aprilTag)
-                    .build();
+            try {
+                visionPortal = new VisionPortal.Builder()
+                        .setCamera(BuiltinCameraDirection.BACK)
+                        .addProcessor(aprilTag)
+                        .build();
+            } catch (Exception e) {
+                telemetry.addData("vision-init", "phone cam init failed: %s", e.toString());
+                telemetry.update();
+                visionPortal = null;
+            }
         }
+
+        telemetry.addData("visionPortal", visionPortal == null ? "null" : "created");
+        telemetry.update();
     }
 
     private void sampleTagBeforeStart(double timeoutSeconds) {
         double start = runtime.seconds();
+        telemetry.addData("sampleTagBeforeStart", "timeout=%.2fs", timeoutSeconds);
+        telemetry.update();
+
         while (!isStarted() && !isStopRequested() && (runtime.seconds() - start) < timeoutSeconds) {
-            List<AprilTagDetection> detections = aprilTag.getDetections();
-            for (AprilTagDetection det : detections) {
-                telemetry.addData("preseen", "%d (%s)", det.id, det.metadata != null ? det.metadata.name : "no-meta");
-                if (det.metadata != null && isDesiredTag(det.id)) {
-                    seenTagId = det.id;
-                    telemetry.addData("prechosen", seenTagId);
+            List<AprilTagDetection> detections = null;
+            try {
+                detections = aprilTag == null ? null : aprilTag.getDetections();
+            } catch (Exception e) {
+                telemetry.addData("pre-getDet", "ex: %s", e.toString());
+                telemetry.update();
+                sleep(40);
+                continue;
+            }
+
+            telemetry.addData("pre-detections", detections == null ? "null" : detections.size());
+            telemetry.update();
+
+            if (detections != null && !detections.isEmpty()) {
+                for (AprilTagDetection det : detections) {
+                    if (det == null) continue;
+                    telemetry.addData("preseen", "%d (%s)", det.id, det.metadata != null ? det.metadata.name : "no-meta");
                     telemetry.update();
-                    return;
+
+                    if (det.metadata != null && isDesiredTag(det.id)) {
+                        seenTagId = det.id;
+                        telemetry.addData("prechosen", seenTagId);
+                        telemetry.update();
+                        return;
+                    }
                 }
             }
-            telemetry.update();
+
             sleep(50);
         }
+        telemetry.addData("prestart-end", "done scanning prestart");
+        telemetry.update();
     }
 
     private boolean isDesiredTag(int id) {
@@ -438,31 +588,61 @@ public class BlueBackAutonomous extends LinearOpMode {
     }
 
     private void setManualExposure(int exposureMS, int gain) {
-        if (visionPortal == null) return;
+        if (visionPortal == null) {
+            telemetry.addData("setManualExposure", "visionPortal == null");
+            telemetry.update();
+            return;
+        }
+
+        telemetry.addData("CameraState-at-call", visionPortal.getCameraState().toString());
+        telemetry.update();
+
+        long start = System.currentTimeMillis();
+        while (!isStopRequested() && (visionPortal.getCameraState() != VisionPortal.CameraState.STREAMING) && (System.currentTimeMillis()-start) < 5000) {
+            telemetry.addData("Camera", "Waiting for stream (timeout 5s) state=%s", visionPortal.getCameraState());
+            telemetry.update();
+            sleep(50);
+        }
 
         if (visionPortal.getCameraState() != VisionPortal.CameraState.STREAMING) {
-            telemetry.addData("Camera", "Waiting for stream");
+            telemetry.addData("Camera", "NOT STREAMING after wait, continuing without exposure set");
             telemetry.update();
-            while (!isStopRequested() && (visionPortal.getCameraState() != VisionPortal.CameraState.STREAMING)) {
+            return;
+        }
+
+        ExposureControl exposureControl = visionPortal.getCameraControl(ExposureControl.class);
+        if (exposureControl != null) {
+            try {
+                if (exposureControl.getMode() != ExposureControl.Mode.Manual) {
+                    exposureControl.setMode(ExposureControl.Mode.Manual);
+                    sleep(50);
+                }
+                exposureControl.setExposure((long) exposureMS, TimeUnit.MILLISECONDS);
                 sleep(20);
+            } catch (Exception e) {
+                telemetry.addData("exposure", "failed: %s", e.toString());
+                telemetry.update();
             }
-            telemetry.addData("Camera", "Ready");
+        } else {
+            telemetry.addData("exposure", "control null");
             telemetry.update();
         }
 
-        if (!isStopRequested()) {
-            ExposureControl exposureControl = visionPortal.getCameraControl(ExposureControl.class);
-            if (exposureControl.getMode() != ExposureControl.Mode.Manual) {
-                exposureControl.setMode(ExposureControl.Mode.Manual);
-                sleep(50);
+        GainControl gainControl = visionPortal.getCameraControl(GainControl.class);
+        if (gainControl != null) {
+            try {
+                gainControl.setGain(gain);
+                sleep(20);
+            } catch (Exception e) {
+                telemetry.addData("gain", "failed: %s", e.toString());
+                telemetry.update();
             }
-            exposureControl.setExposure((long) exposureMS, TimeUnit.MILLISECONDS);
-            sleep(20);
-            GainControl gainControl = visionPortal.getCameraControl(GainControl.class);
-            gainControl.setGain(gain);
-            sleep(20);
-            telemetry.addData("Camera", "Ready");
+        } else {
+            telemetry.addData("gain", "control null");
             telemetry.update();
         }
+
+        telemetry.addData("Camera", "Ready");
+        telemetry.update();
     }
 }
