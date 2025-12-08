@@ -8,7 +8,7 @@ import com.qualcomm.robotcore.hardware.CRServo;
 
 @TeleOp(name = "DecodeMain")
 public class DecodeMain extends LinearOpMode {
-    private Blinker blinker;
+    private Blinker control_hub;
   
     private DcMotor bottomL = null;
     private DcMotor bottomR = null;
@@ -27,7 +27,7 @@ public class DecodeMain extends LinearOpMode {
     public void runOpMode() {
         // Initialize hardware
         //wyatt code
-        blinker = hardwareMap.get(Blinker.class, "Control Hub");
+        control_hub = hardwareMap.get(Blinker.class, "Control Hub");
         
         topL = hardwareMap.get(DcMotor.class, "topL");
         topR = hardwareMap.get(DcMotor.class, "topR");
@@ -97,13 +97,14 @@ public class DecodeMain extends LinearOpMode {
             //} else {
               //  wrist.setPower(0);
             //}
+            
             //blinker color set
             if (blinker == "orange") {
-                blinker.setConstant(Color.ORANGE);
+                control_hub.setConstant(Color.ORANGE);
             } else if (blinker == "red") {
-                blinker.setConstant(Color.RED);
+                control_hub.setConstant(Color.RED);
             } else {
-                blinker.setConstant(Color.GREEN);
+                control_hub.setConstant(Color.GREEN);
             }
                 
             //crazy button
