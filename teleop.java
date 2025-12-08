@@ -8,7 +8,7 @@ import com.qualcomm.robotcore.hardware.CRServo;
 
 @TeleOp(name = "DecodeMain")
 public class DecodeMain extends LinearOpMode {
-    private Blinker control_Hub;
+    private Blinker blinker;
   
     private DcMotor bottomL = null;
     private DcMotor bottomR = null;
@@ -19,12 +19,16 @@ public class DecodeMain extends LinearOpMode {
     private DcMotor leftIntake = null;    
     private DcMotor leftOutake = null;
     private DcMotor rightOutake = null; 
-    
+    //wyatt code
+    private str blinker = "orange"
     //private CRServo wrist = null;
     
     @Override
     public void runOpMode() {
         // Initialize hardware
+        //wyatt code
+        blinker = hardwareMap.get(Blinker.class, "Control Hub");
+        
         topL = hardwareMap.get(DcMotor.class, "topL");
         topR = hardwareMap.get(DcMotor.class, "topR");
         bottomL = hardwareMap.get(DcMotor.class, "bottomL");
@@ -42,7 +46,7 @@ public class DecodeMain extends LinearOpMode {
         topL.setDirection(DcMotor.Direction.REVERSE);
         telemetry.addData("Status", "Initialized");
         telemetry.update();
-
+        
         waitForStart();
 
         while (opModeIsActive()) {
@@ -71,10 +75,17 @@ public class DecodeMain extends LinearOpMode {
                 leftIntake.setPower(0);
             } 
             
-            // Outtake 
+            // wyatt modified Outtake 
             if (gamepad2.dpad_up) {
-                rightOutake.setPower(0.99);
-                leftOutake.setPower(-0.99);
+                if (blinker == "orange") {
+                    rightOutake.setPower(0.99);
+                    leftOutake.setPower(-0.99);
+                } else if (blinker == "red") {
+                    rightOutake.setPower(0.99);
+                    leftOutake.setPower(-0.99);
+                } else {
+                    rightOutake.setPower(0.99);
+                    leftOutake.setPower(-0.99);
             } else {
                 rightOutake.setPower(0);
                 leftOutake.setPower(0);
@@ -86,7 +97,26 @@ public class DecodeMain extends LinearOpMode {
             //} else {
               //  wrist.setPower(0);
             //}
-            
+            //blinker color set
+            if (blinker == "orange") {
+                blinker.setConstant(Color.ORANGE);
+            } else if (blinker == "red") {
+                blinker.setConstant(Color.RED);
+            } else {
+                blinker.setConstant(Color.GREEN);
+            }
+                
+            //crazy button
+            if (gamepad1.a) {
+                if (blinker == "orange") {
+                    str blinker = "red";
+                } else if (blinker == "red) {
+                    str blinker = "green";
+                } else {
+                    str blinker = "orange";
+                }
+            }
+                    
             telemetry.update();
         }
     }
