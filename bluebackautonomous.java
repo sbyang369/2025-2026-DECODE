@@ -1,5 +1,3 @@
-//it looks like the functions are working
-// movement is not straight, maybe bc there is a motor causing an imbalance on the right side
 package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
@@ -18,8 +16,10 @@ import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import com.qualcomm.robotcore.hardware.Servo;
 
-@Autonomous(name = "BlueBackAutonomous.java")
+
+@Autonomous(name = "Back Autonomous DECODE.java")
 public class BlueBackAutonomous extends LinearOpMode {
 
     private Blinker control_Hub;
@@ -27,12 +27,13 @@ public class BlueBackAutonomous extends LinearOpMode {
     private DcMotor bottomR = null;
     private DcMotor topL = null;
     private DcMotor topR = null;
-    private DcMotor rightIntake = null;
-    private DcMotor leftIntake = null;
+    private DcMotor intake = null;
+  
     private DcMotor rightOutake = null;
     private DcMotor leftOutake = null;
-    //private CRServo wrist = null;
-
+    private CRServo wrist = null;
+    private CRServo wheel = null;
+  
     private static final boolean USE_WEBCAM = true; // true if using Webcam 1
     private static final int[] DESIRED_TAG_IDS = {21, 22, 23};
     private VisionPortal visionPortal;
@@ -60,13 +61,13 @@ public class BlueBackAutonomous extends LinearOpMode {
             topR = hardwareMap.get(DcMotor.class, "topR");
             bottomL = hardwareMap.get(DcMotor.class, "bottomL");
             bottomR = hardwareMap.get(DcMotor.class, "bottomR");
-            
-            leftIntake = hardwareMap.get(DcMotor.class, "leftIntake");
-            rightIntake = hardwareMap.get(DcMotor.class, "rightIntake");
+          
+            intake = hardwareMap.get(DcMotor.class, "intake");
             leftOutake = hardwareMap.get(DcMotor.class, "leftOutake");
             rightOutake = hardwareMap.get(DcMotor.class, "rightOutake");
-            
-            //wrist = hardwareMap.get(CRServo.class,"wrist");
+            wheel = hardwareMap.get(CRServo.class, "wheel");
+            wrist = hardwareMap.get(CRServo.class, "wrist");
+
         } catch (Exception e) {
             telemetry.addData("ERROR", "hardwareMap lookup failed: %s", e.toString());
             telemetry.update();
@@ -75,9 +76,9 @@ public class BlueBackAutonomous extends LinearOpMode {
 
         // Reverse motor direction where appropriate
         try {
-            if (bottomL != null) bottomL.setDirection(DcMotor.Direction.REVERSE);
-            if (topL != null) topL.setDirection(DcMotor.Direction.REVERSE);
-            if (topR != null) topR.setDirection(DcMotor.Direction.FORWARD);
+            topL.setDirection(DcMotor.Direction.FORWARD);
+            topR.setDirection(DcMotor.Direction.REVERSE);
+            bottomL.setDirection(DcMotor.Direction.FORWARD);
         } catch (Exception e) {
             telemetry.addData("WARN", "couldn't set motor direction: %s", e.toString());
             telemetry.update();
@@ -98,6 +99,10 @@ public class BlueBackAutonomous extends LinearOpMode {
             telemetry.addData("WARN", "encoder/reset failed: %s", e.toString());
             telemetry.update();
         }
+       
+        topL.setDirection(DcMotor.Direction.FORWARD);
+        topR.setDirection(DcMotor.Direction.REVERSE);
+        bottomL.setDirection(DcMotor.Direction.FORWARD);
 
         // Init vision
         telemetry.addLine("initAprilTag()");
@@ -138,30 +143,42 @@ public class BlueBackAutonomous extends LinearOpMode {
             telemetry.update();
             return;
         }
-        
-        // APPROACH OBELISK
-        //driveForward(-70,0.5);
-        //turnRight(115,0.5);
-        //driveForward(-35,0.5);
-        //turnLeft(115,0.5);
-        //driveForward(-20,0.5);
-        
-        turnLeft(130,0.5);
-        driveForward(-20,0.5);
-        
-        turnRight(130,0.5);
-        driveForward(-105,0.5);
-        
-        turnLeft(50,0.5);
-        
-        // Shoot
-        
-        rightOutake.setPower(0.99);
-        leftOutake.setPower(-0.99);
-        sleep(200); //might need to adjust
-        rightOutake.setPower(0);
-        leftOutake.setPower(0);
+       
+       // PARKING OUT - last resort
+       // driveForward(-40,0.7);
 
+       //Shooting
+       // Shoot - need to refine the shooting sequence
+       //first ball
+       rightOutake.setPower(0.60);
+       leftOutake.setPower(-0.60);
+       wrist.setPower(1); // SHOOT
+       sleep(3000);
+
+        //second ball
+       wrist.setPower(0);
+       sleep(1000);
+       wheel.setPower(0.2);
+       sleep(1125);
+       wheel.setPower(0);
+       wrist.setPower(1); // SHOOT
+       sleep(3000);
+
+        //third  ball
+       wrist.setPower(0);
+       sleep(1000);
+       wheel.setPower(0.2);
+       sleep(1125);
+       wheel.setPower(0);
+       wrist.setPower(1); // shoot position
+       sleep(3000);
+       
+       rightOutake.setPower(0);
+       leftOutake.setPower(0);
+       wrist.setPower(0);
+        
+       driveForward(20,0.7);
+        
         // If we didn't see a tag prestart, try scanning during run
         if (seenTagId < 0 || !isDesiredTag(seenTagId)) {
             telemetry.addLine("No desired prestart tag — scanning during run...");
@@ -204,7 +221,7 @@ public class BlueBackAutonomous extends LinearOpMode {
                         if (isDesiredTag(d.id)) {
                             seenTagId = d.id;
                             telemetry.addData("chosen", seenTagId);
-                            
+                           
                             telemetry.update();
                             foundDesired = true;
                             break;
@@ -260,7 +277,7 @@ public class BlueBackAutonomous extends LinearOpMode {
             telemetry.addLine("Debug: Tag not found or not desired after scan.");
             telemetry.update();
         }
-        
+       
         // Final cleanup (printed after the check)
         telemetry.addData("END: Tag is", seenTagId);
         telemetry.addData("DBG - final runtime(s)", "%.3f", runtime.seconds());
