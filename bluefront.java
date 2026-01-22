@@ -31,7 +31,7 @@ public class BlueFrontAutonomous extends LinearOpMode {
   
     private DcMotor rightOutake = null;
     private DcMotor leftOutake = null;
-    private Servo wrist = null;
+    private CRServo wrist = null;
     private CRServo wheel = null;
   
     private static final boolean USE_WEBCAM = true; // true if using Webcam 1
@@ -66,7 +66,7 @@ public class BlueFrontAutonomous extends LinearOpMode {
             leftOutake = hardwareMap.get(DcMotor.class, "leftOutake");
             rightOutake = hardwareMap.get(DcMotor.class, "rightOutake");
             wheel = hardwareMap.get(CRServo.class, "wheel");
-            wrist = hardwareMap.get(Servo.class, "wrist");
+            wrist = hardwareMap.get(CRServo.class, "wrist");
 
         } catch (Exception e) {
             telemetry.addData("ERROR", "hardwareMap lookup failed: %s", e.toString());
@@ -77,8 +77,8 @@ public class BlueFrontAutonomous extends LinearOpMode {
         // Reverse motor direction where appropriate
         try {
             topL.setDirection(DcMotor.Direction.FORWARD);
-            topR.setDirection(DcMotor.Direction.FORWARD);
-            bottomL.setDirection(DcMotor.Direction.REVERSE);
+            topR.setDirection(DcMotor.Direction.REVERSE);
+            bottomL.setDirection(DcMotor.Direction.FORWARD);
         } catch (Exception e) {
             telemetry.addData("WARN", "couldn't set motor direction: %s", e.toString());
             telemetry.update();
@@ -155,36 +155,39 @@ public class BlueFrontAutonomous extends LinearOpMode {
         //topR.setPower(0);
         //bottomL.setPower(0);
         //bottomR.setPower(0);
-        driveForward(65,0.7);
+        
+        driveForward(80,0.7);
 
         // Shoot - need to refine the shooting sequence
         //first ball
         rightOutake.setPower(0.60);
         leftOutake.setPower(-0.60);
-        wrist.setPosition(0); // SHOOT
+        wrist.setPower(1); // SHOOT
         sleep(3000);
 
         //second ball
-        wrist.setPosition(0.8);
+        wrist.setPower(0);
         sleep(1000);
-        wheel.setPower(-0.60);
-        sleep(1100);
+        wheel.setPower(0.2);
+        sleep(1125);
         wheel.setPower(0);
-        wrist.setPosition(0); // SHOOT
+        wrist.setPower(1); // SHOOT
         sleep(3000);
 
         //third  ball
-        wrist.setPosition(0.8);
+        wrist.setPower(0);
         sleep(1000);
-        wheel.setPower(-0.60);
-        sleep(1100);
+        wheel.setPower(0.2);
+        sleep(1125);
         wheel.setPower(0);
-        wrist.setPosition(0); // shoot position
+        wrist.setPower(1); // shoot position
         sleep(3000);
        
         rightOutake.setPower(0);
         leftOutake.setPower(0);
-        //wrist.setPosition(0.8);
+        wrist.setPower(0);
+        
+        driveForward(20,0.7);
 
         // Intake first row
    //     turnRight(100,0.5);
