@@ -143,20 +143,11 @@ public class BlueFrontAutonomous extends LinearOpMode {
             telemetry.update();
             return;
         }
-       
-        //sleep(10000);
-       
-       // topL.setPower(-0.5);
-        //topR.setPower(-0.5);
-        //bottomL.setPower(-0.5);
-        //bottomR.setPower(-0.5);
-        //sleep(1000);
-        //topL.setPower(0);
-        //topR.setPower(0);
-        //bottomL.setPower(0);
-        //bottomR.setPower(0);
         
-        driveForward(80,0.7);
+        //backup- move straight back. last resort. NEED TO TEST
+        //driveForward(45,0.7);
+       
+        driveForward(-20,0.7); //NEED TO REFINE TO GET IN THE RIGHT POSITION
 
         // Shoot - need to refine the shooting sequence
         //first ball
