@@ -149,6 +149,7 @@ public class BlueBackAutonomous extends LinearOpMode {
 
        //Shooting
        // Shoot - need to refine the shooting sequence
+       
        //first ball
        rightOutake.setPower(0.60);
        leftOutake.setPower(-0.60);
